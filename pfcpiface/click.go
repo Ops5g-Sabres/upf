@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2020 Intel Corporation
-
 package pfcpiface
 
 import (
@@ -12,75 +9,32 @@ import (
 	"strconv"
 	"time"
 
-	"google.golang.org/grpc/connectivity"
-
-	"google.golang.org/grpc/credentials/insecure"
-
 	pb "github.com/omec-project/upf/pfcpiface/bess_pb"
-	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
-	"github.com/wmnsk/go-pfcp/ie"
+
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/anypb"
+
+	//pb "github.com/omec-project/upf/pfcpiface/click_pb"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/wmnsk/go-pfcp/ie"
 )
 
-const (
-	// DefaultBurstSize for cbs, pbs required for dpdk metering. 32 MTUs.
-	DefaultBurstSize = 32 * 1514
-	// SockAddr : Unix Socket path to read bess notification from.
-	SockAddr = "/tmp/notifycp"
-	// PfcpAddr : Unix Socket path to send end marker packet.
-	PfcpAddr = "/tmp/pfcpport"
-	// AppQerLookup: Application Qos table Name.
-	AppQerLookup = "appQERLookup"
-	// SessQerLookup: Session Qos table Name.
-	SessQerLookup = "sessionQERLookup"
-	// PreQosFlowMeasure: Pre QoS measurement module name.
-	PreQosFlowMeasure = "preQosFlowMeasure"
-	// PostDlQosFlowMeasure: Post QoS measurement downlink module name.
-	PostDlQosFlowMeasure = "postDLQosFlowMeasure"
-	// PostUlQosFlowMeasure: Post QoS measurement uplink module name.
-	PostUlQosFlowMeasure = "postULQosFlowMeasure"
-	// far-action specific values.
-	farForwardD = 0x0
-	farForwardU = 0x1
-	farDrop     = 0x2
-	farNotify   = 0x4
-	// Bit Rates.
-	KB = 1000
-	MB = 1000000
-	GB = 1000000000
-)
+var clickIP = flag.String("click", "localhost:10514", "BESS IP/port combo")
 
-const (
-	// Internal gates for QER.
-	qerGateMeter      uint64 = 0
-	qerGateStatusDrop uint64 = 5
-	qerGateUnmeter    uint64 = 6
-)
-
-const (
-	// Internal gates for Slice meter.
-	sliceMeterGateMeter   uint64 = 0
-	sliceMeterGateUnmeter uint64 = 6
-)
-
-var intEnc = func(u uint64) *pb.FieldData {
-	return &pb.FieldData{Encoding: &pb.FieldData_ValueInt{ValueInt: u}}
+type click struct {
+	client            pb.BESSControlClient
+	conn              *grpc.ClientConn
+	endMarkerSocket   net.Conn
+	notifyClickSocket net.Conn
+	endMarkerChan     chan []byte
+	qciQosMap         map[uint8]*QosConfigVal
 }
 
-var bessIP = flag.String("bess", "localhost:10514", "BESS IP/port combo")
-
-type bess struct {
-	client           pb.BESSControlClient
-	conn             *grpc.ClientConn
-	endMarkerSocket  net.Conn
-	notifyBessSocket net.Conn
-	endMarkerChan    chan []byte
-	qciQosMap        map[uint8]*QosConfigVal
-}
-
-func (b *bess) IsConnected(accessIP *net.IP) bool {
+func (b *click) IsConnected(accessIP *net.IP) bool {
 	if (b.conn == nil) || (b.conn.GetState() != connectivity.Ready) {
 		return false
 	}
@@ -88,7 +42,7 @@ func (b *bess) IsConnected(accessIP *net.IP) bool {
 	return true
 }
 
-func (b *bess) SendEndMarkers(endMarkerList *[][]byte) error {
+func (b *click) SendEndMarkers(endMarkerList *[][]byte) error {
 	for _, eMarker := range *endMarkerList {
 		b.endMarkerChan <- eMarker
 	}
@@ -96,7 +50,7 @@ func (b *bess) SendEndMarkers(endMarkerList *[][]byte) error {
 	return nil
 }
 
-func (b *bess) AddSliceInfo(sliceInfo *SliceInfo) error {
+func (b *click) AddSliceInfo(sliceInfo *SliceInfo) error {
 	var sliceMeterConfig SliceMeterConfig
 	sliceMeterConfig.N6RateBps = sliceInfo.uplinkMbr
 	sliceMeterConfig.N3RateBps = sliceInfo.downlinkMbr
@@ -119,7 +73,7 @@ func (b *bess) AddSliceInfo(sliceInfo *SliceInfo) error {
 	return nil
 }
 
-func (b *bess) SendMsgToUPF(
+func (b *click) SendMsgToUPF(
 	method upfMsgType, rules PacketForwardingRules, updated PacketForwardingRules) uint8 {
 	// create context
 	var cause uint8 = ie.CauseRequestAccepted
@@ -191,12 +145,12 @@ func (b *bess) SendMsgToUPF(
 	return cause
 }
 
-func (b *bess) Exit() {
-	log.Println("Exit function Bess")
+func (b *click) Exit() {
+	log.Println("Exit function Click")
 	b.conn.Close()
 }
 
-func (b *bess) measureUpf(ifName string, f *pb.MeasureCommandGetSummaryArg) *pb.MeasureCommandGetSummaryResponse {
+func (b *click) measureUpf(ifName string, f *pb.MeasureCommandGetSummaryArg) *pb.MeasureCommandGetSummaryResponse {
 	modName := func() string {
 		return ifName + "_measure"
 	}
@@ -230,7 +184,7 @@ func (b *bess) measureUpf(ifName string, f *pb.MeasureCommandGetSummaryArg) *pb.
 	return &res
 }
 
-func (b *bess) getPortStats(ifname string) *pb.GetPortStatsResponse {
+func (b *click) getPortStats(ifname string) *pb.GetPortStatsResponse {
 	ctx := context.Background()
 	req := &pb.GetPortStatsRequest{
 		Name: ifname + "Fast",
@@ -250,7 +204,7 @@ func (b *bess) getPortStats(ifname string) *pb.GetPortStatsResponse {
 	return res
 }
 
-func (b *bess) PortStats(uc *upfCollector, ch chan<- prometheus.Metric) {
+func (b *click) PortStats(uc *upfCollector, ch chan<- prometheus.Metric) {
 	portstats := func(ifaceLabel, ifaceName string) {
 		packets := func(packets uint64, direction string) {
 			p := prometheus.MustNewConstMetric(
@@ -299,7 +253,7 @@ func (b *bess) PortStats(uc *upfCollector, ch chan<- prometheus.Metric) {
 	portstats("Core", uc.upf.coreIface)
 }
 
-func (b *bess) SummaryLatencyJitter(uc *upfCollector, ch chan<- prometheus.Metric) {
+func (b *click) SummaryLatencyJitter(uc *upfCollector, ch chan<- prometheus.Metric) {
 	measureIface := func(ifaceLabel, ifaceName string) {
 		req := &pb.MeasureCommandGetSummaryArg{
 			Clear:              true,
@@ -342,7 +296,7 @@ func (b *bess) SummaryLatencyJitter(uc *upfCollector, ch chan<- prometheus.Metri
 	measureIface("Core", uc.upf.coreIface)
 }
 
-func (b *bess) flipFlowMeasurementBufferFlag(ctx context.Context, module string) (flip pb.FlowMeasureFlipResponse, err error) {
+func (b *click) flipFlowMeasurementBufferFlag(ctx context.Context, module string) (flip pb.FlowMeasureFlipResponse, err error) {
 	req := &pb.FlowMeasureCommandFlipArg{}
 
 	any, err := anypb.New(req)
@@ -377,7 +331,7 @@ func (b *bess) flipFlowMeasurementBufferFlag(ctx context.Context, module string)
 	return
 }
 
-func (b *bess) readFlowMeasurement(
+func (b *click) readFlowMeasurement(
 	ctx context.Context, module string, flagToRead uint64, clear bool, q []float64,
 ) (stats pb.FlowMeasureReadResponse, err error) {
 	req := &pb.FlowMeasureCommandReadArg{
@@ -419,7 +373,7 @@ func (b *bess) readFlowMeasurement(
 	return
 }
 
-func (b *bess) SessionStats(pc *PfcpNodeCollector, ch chan<- prometheus.Metric) (err error) {
+func (b *click) SessionStats(pc *PfcpNodeCollector, ch chan<- prometheus.Metric) (err error) {
 	// Clearing table data with large tables is slow, let's wait for a little longer since this is
 	// non-blocking for the dataplane anyway.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
@@ -569,7 +523,7 @@ func (b *bess) SessionStats(pc *PfcpNodeCollector, ch chan<- prometheus.Metric) 
 	return
 }
 
-func (b *bess) endMarkerSendLoop(endMarkerChan chan []byte) {
+func (b *click) endMarkerSendLoop(endMarkerChan chan []byte) {
 	for outPacket := range endMarkerChan {
 		_, err := b.endMarkerSocket.Write(outPacket)
 		if err != nil {
@@ -578,13 +532,13 @@ func (b *bess) endMarkerSendLoop(endMarkerChan chan []byte) {
 	}
 }
 
-func (b *bess) notifyListen(reportNotifyChan chan<- uint64) {
+func (b *click) notifyListen(reportNotifyChan chan<- uint64) {
 	notifier := NewDownlinkDataNotifier(reportNotifyChan, 20*time.Second)
 
 	for {
 		buf := make([]byte, 512)
 
-		_, err := b.notifyBessSocket.Read(buf)
+		_, err := b.notifyClickSocket.Read(buf)
 		if err != nil {
 			return
 		}
@@ -596,7 +550,7 @@ func (b *bess) notifyListen(reportNotifyChan chan<- uint64) {
 	}
 }
 
-func (b *bess) readQciQosMap(conf *Conf) {
+func (b *click) readQciQosMap(conf *Conf) {
 	b.qciQosMap = make(map[uint8]*QosConfigVal)
 
 	for _, qosVal := range conf.QciQosConfig {
@@ -624,7 +578,7 @@ func (b *bess) readQciQosMap(conf *Conf) {
 // clearState removes all rules from pdrLookup, farLookup, appQerLookup and sessQerLookup.
 // It doesn't clear sliceMeter, because slice config is dynamically provided via REST API
 // and there is no guarantee that the config will be pushed again after pfcp-agent's restart.
-func (b *bess) clearState() {
+func (b *click) clearState() {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
 
@@ -669,18 +623,18 @@ func (b *bess) clearState() {
 
 // setUpfInfo is only called at pfcp-agent's startup
 // it clears all the state in BESS
-func (b *bess) SetUpfInfo(u *upf, conf *Conf) {
+func (b *click) SetUpfInfo(u *upf, conf *Conf) {
 	var err error
 
-	log.Println("SetUpfInfo bess")
+	log.Println("SetUpfInfo click")
 
 	b.readQciQosMap(conf)
-	// get bess grpc client
-	log.Println("bessIP ", *bessIP)
+	// get click grpc client
+	log.Println("clickIP ", *clickIP)
 
 	b.endMarkerChan = make(chan []byte, 1024)
 
-	b.conn, err = grpc.Dial(*bessIP, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	b.conn, err = grpc.Dial(*clickIP, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalln("did not connect:", err)
 	}
@@ -689,13 +643,13 @@ func (b *bess) SetUpfInfo(u *upf, conf *Conf) {
 
 	b.clearState()
 
-	if conf.EnableNotifyBess {
+	if conf.EnableNotifyClick {
 		notifySockAddr := conf.NotifySockAddr
 		if notifySockAddr == "" {
 			notifySockAddr = SockAddr
 		}
 
-		b.notifyBessSocket, err = net.Dial("unixpacket", notifySockAddr)
+		b.notifyClickSocket, err = net.Dial("unixpacket", notifySockAddr)
 		if err != nil {
 			log.Println("dial error:", err)
 			return
@@ -737,7 +691,7 @@ func (b *bess) SetUpfInfo(u *upf, conf *Conf) {
 	}
 }
 
-func (b *bess) processPDR(ctx context.Context, any *anypb.Any, method upfMsgType) {
+func (b *click) processPDR(ctx context.Context, any *anypb.Any, method upfMsgType) {
 	if method != upfMsgTypeAdd && method != upfMsgTypeDel && method != upfMsgTypeClear {
 		log.Println("Invalid method name: ", method)
 		return
@@ -758,7 +712,7 @@ func (b *bess) processPDR(ctx context.Context, any *anypb.Any, method upfMsgType
 	}
 }
 
-func (b *bess) addPDR(ctx context.Context, done chan<- bool, p pdr) {
+func (b *click) addPDR(ctx context.Context, done chan<- bool, p pdr) {
 	go func() {
 		var (
 			any *anypb.Any
@@ -826,7 +780,7 @@ func (b *bess) addPDR(ctx context.Context, done chan<- bool, p pdr) {
 	}()
 }
 
-func (b *bess) delPDR(ctx context.Context, done chan<- bool, p pdr) {
+func (b *click) delPDR(ctx context.Context, done chan<- bool, p pdr) {
 	go func() {
 		var (
 			any *anypb.Any
@@ -876,7 +830,7 @@ func (b *bess) delPDR(ctx context.Context, done chan<- bool, p pdr) {
 	}()
 }
 
-func (b *bess) addQER(ctx context.Context, done chan<- bool, qer qer) {
+func (b *click) addQER(ctx context.Context, done chan<- bool, qer qer) {
 	go func() {
 		var (
 			cir, pir, cbs, ebs, pbs, gate uint64
@@ -953,7 +907,7 @@ func (b *bess) addQER(ctx context.Context, done chan<- bool, qer qer) {
 	}()
 }
 
-func (b *bess) addApplicationQER(ctx context.Context, gate uint64, srcIface uint8,
+func (b *click) addApplicationQER(ctx context.Context, gate uint64, srcIface uint8,
 	cir uint64, pir uint64, cbs uint64, pbs uint64,
 	ebs uint64, qer qer) {
 	var (
@@ -992,7 +946,7 @@ func (b *bess) addApplicationQER(ctx context.Context, gate uint64, srcIface uint
 	}
 }
 
-func (b *bess) delQER(ctx context.Context, done chan<- bool, qer qer) {
+func (b *click) delQER(ctx context.Context, done chan<- bool, qer qer) {
 	go func() {
 		var srcIface uint8
 
@@ -1018,7 +972,7 @@ func (b *bess) delQER(ctx context.Context, done chan<- bool, qer qer) {
 	}()
 }
 
-func (b *bess) delApplicationQER(
+func (b *click) delApplicationQER(
 	ctx context.Context, srcIface uint8, qer qer) {
 	var (
 		any *anypb.Any
@@ -1047,7 +1001,7 @@ func (b *bess) delApplicationQER(
 	}
 }
 
-func (b *bess) processFAR(ctx context.Context, any *anypb.Any, method upfMsgType) {
+func (b *click) processFAR(ctx context.Context, any *anypb.Any, method upfMsgType) {
 	if method != upfMsgTypeAdd && method != upfMsgTypeDel && method != upfMsgTypeClear {
 		log.Println("Invalid method name: ", method)
 		return
@@ -1068,7 +1022,7 @@ func (b *bess) processFAR(ctx context.Context, any *anypb.Any, method upfMsgType
 	}
 }
 
-func (b *bess) setActionValue(f far) uint8 {
+func (b *click) setActionValue(f far) uint8 {
 	if (f.applyAction & ActionForward) != 0 {
 		if f.dstIntf == ie.DstInterfaceAccess {
 			return farForwardD
@@ -1087,7 +1041,7 @@ func (b *bess) setActionValue(f far) uint8 {
 	return farDrop
 }
 
-func (b *bess) addFAR(ctx context.Context, done chan<- bool, far far) {
+func (b *click) addFAR(ctx context.Context, done chan<- bool, far far) {
 	go func() {
 		var (
 			any *anypb.Any
@@ -1122,7 +1076,7 @@ func (b *bess) addFAR(ctx context.Context, done chan<- bool, far far) {
 	}()
 }
 
-func (b *bess) delFAR(ctx context.Context, done chan<- bool, far far) {
+func (b *click) delFAR(ctx context.Context, done chan<- bool, far far) {
 	go func() {
 		var (
 			any *anypb.Any
@@ -1147,7 +1101,7 @@ func (b *bess) delFAR(ctx context.Context, done chan<- bool, far far) {
 	}()
 }
 
-func (b *bess) processSliceMeter(ctx context.Context, any *anypb.Any, method upfMsgType) {
+func (b *click) processSliceMeter(ctx context.Context, any *anypb.Any, method upfMsgType) {
 	if method != upfMsgTypeAdd && method != upfMsgTypeDel && method != upfMsgTypeClear {
 		log.Errorln("Invalid method name: ", method)
 		return
@@ -1167,7 +1121,7 @@ func (b *bess) processSliceMeter(ctx context.Context, any *anypb.Any, method upf
 	}
 }
 
-func (b *bess) addSliceMeter(ctx context.Context, done chan<- bool, meterConfig SliceMeterConfig) {
+func (b *click) addSliceMeter(ctx context.Context, done chan<- bool, meterConfig SliceMeterConfig) {
 	go func() {
 		var (
 			any                           *anypb.Any
@@ -1266,7 +1220,7 @@ func (b *bess) addSliceMeter(ctx context.Context, done chan<- bool, meterConfig 
 	}()
 }
 
-func (b *bess) processQER(ctx context.Context, any *anypb.Any, method upfMsgType, qosTableName string) error {
+func (b *click) processQER(ctx context.Context, any *anypb.Any, method upfMsgType, qosTableName string) error {
 	if method != upfMsgTypeAdd && method != upfMsgTypeDel && method != upfMsgTypeClear {
 		return ErrInvalidArgument("method name", method)
 	}
@@ -1289,7 +1243,7 @@ func (b *bess) processQER(ctx context.Context, any *anypb.Any, method upfMsgType
 	return nil
 }
 
-func (b *bess) addSessionQER(ctx context.Context, gate uint64, srcIface uint8,
+func (b *click) addSessionQER(ctx context.Context, gate uint64, srcIface uint8,
 	cir uint64, pir uint64, cbs uint64,
 	pbs uint64, ebs uint64, qer qer) {
 	var (
@@ -1324,7 +1278,7 @@ func (b *bess) addSessionQER(ctx context.Context, gate uint64, srcIface uint8,
 	}
 }
 
-func (b *bess) delSessionQER(ctx context.Context, srcIface uint8, qer qer) {
+func (b *click) delSessionQER(ctx context.Context, srcIface uint8, qer qer) {
 	var (
 		any *anypb.Any
 		err error
@@ -1351,7 +1305,7 @@ func (b *bess) delSessionQER(ctx context.Context, srcIface uint8, qer qer) {
 	}
 }
 
-func (b *bess) GRPCJoin(calls int, timeout time.Duration, done chan bool) bool {
+func (b *click) GRPCJoin(calls int, timeout time.Duration, done chan bool) bool {
 	boom := time.After(timeout)
 
 	for {

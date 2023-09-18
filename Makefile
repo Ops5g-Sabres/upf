@@ -36,7 +36,7 @@ DOCKER_LABEL_VCS_REF     ?= $(shell git diff-index --quiet HEAD -- && git rev-pa
 DOCKER_LABEL_COMMIT_DATE ?= $(shell git diff-index --quiet HEAD -- && git show -s --format=%cd --date=iso-strict HEAD || echo "unknown" )
 DOCKER_LABEL_BUILD_DATE  ?= $(shell date -u "+%Y-%m-%dT%H:%M:%SZ")
 
-DOCKER_TARGETS           ?= bess pfcpiface
+DOCKER_TARGETS           ?= bess pfcpiface fastclick
 
 # Golang grpc/protobuf generation
 BESS_PB_DIR ?= pfcpiface
@@ -91,6 +91,14 @@ test-bess-integration-native:
        -failfast \
        ./test/integration/...
 
+test-click-integration-native:
+	MODE=native DATAPATH=click go test \
+       -v \
+       -race \
+       -count=1 \
+       -failfast \
+       ./test/integration/...
+
 pb:
 	DOCKER_BUILDKIT=$(DOCKER_BUILDKIT) docker build $(DOCKER_PULL) $(DOCKER_BUILD_ARGS) \
 		--target pb \
@@ -127,6 +135,11 @@ p4-constants:
 		-output internal/p4constants/p4constants.go -p4info conf/p4/bin/p4info.txt
 	@docker run --rm -v $(CURDIR):/app -w /app \
 		golang:latest gofmt -w internal/p4constants/p4constants.go
+
+
+lincoln:
+	CGO_ENABLED=0 go build $(GOFLAGS) -o ./bin/pfcpiface ./cmd/pfcpiface
+
 
 fmt:
 	@go fmt ./...

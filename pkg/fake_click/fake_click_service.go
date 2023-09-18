@@ -1,20 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2022 Open Networking Foundation
 
-package fake_bess
+package fake_click
 
 import (
 	"context"
 	"fmt"
-	"github.com/omec-project/upf/pfcpiface/bess_pb"
+	"math"
+	"sync"
+
+	"github.com/omec-project/upf/pfcpiface/click_pb"
 	"github.com/omec-project/upf/pkg/utils"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
-	"math"
-	"sync"
 )
 
 const (
@@ -138,25 +139,25 @@ func (q FakeQer) String() string {
 		q.qosLevel, q.ulStatus, q.dlStatus)
 }
 
-type fakeBessService struct {
-	bess_pb.UnimplementedBESSControlServer
+type fakeClickService struct {
+	click_pb.UnimplementedClickControlServer
 	modules map[string]module
 	mtx     sync.Mutex
 }
 
-func newFakeBESSService() *fakeBessService {
-	return &fakeBessService{
+func newFakeClickService() *fakeClickService {
+	return &fakeClickService{
 		modules: make(map[string]module),
 	}
 }
 
-func (b *fakeBessService) GetOrAddModule(name string) module {
+func (b *fakeClickService) GetOrAddModule(name string) module {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 	return b.unsafeGetOrAddModule(name)
 }
 
-func (b *fakeBessService) unsafeGetOrAddModule(name string) module {
+func (b *fakeClickService) unsafeGetOrAddModule(name string) module {
 	if _, ok := b.modules[name]; !ok {
 		if name == pdrLookupModuleName {
 			b.modules[name] = &wildcardModule{
@@ -180,14 +181,14 @@ func (b *fakeBessService) unsafeGetOrAddModule(name string) module {
 	return b.modules[name]
 }
 
-func (b *fakeBessService) GetPortStats(ctx context.Context, request *bess_pb.GetPortStatsRequest) (*bess_pb.GetPortStatsResponse, error) {
+func (b *fakeClickService) GetPortStats(ctx context.Context, request *click_pb.GetPortStatsRequest) (*click_pb.GetPortStatsResponse, error) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 	// TODO: implement it
-	return &bess_pb.GetPortStatsResponse{}, nil
+	return &click_pb.GetPortStatsResponse{}, nil
 }
 
-func (b *fakeBessService) ModuleCommand(ctx context.Context, request *bess_pb.CommandRequest) (*bess_pb.CommandResponse, error) {
+func (b *fakeClickService) ModuleCommand(ctx context.Context, request *click_pb.CommandRequest) (*click_pb.CommandResponse, error) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
@@ -196,10 +197,10 @@ func (b *fakeBessService) ModuleCommand(ctx context.Context, request *bess_pb.Co
 		return nil, err
 	}
 
-	return &bess_pb.CommandResponse{}, nil
+	return &click_pb.CommandResponse{}, nil
 }
 
-func fieldsAreEqual(a, b []*bess_pb.FieldData) bool {
+func fieldsAreEqual(a, b []*click_pb.FieldData) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -213,7 +214,7 @@ func fieldsAreEqual(a, b []*bess_pb.FieldData) bool {
 	return true
 }
 
-func UnmarshalPdr(wc *bess_pb.WildcardMatchCommandAddArg) (p FakePdr) {
+func UnmarshalPdr(wc *click_pb.WildcardMatchCommandAddArg) (p FakePdr) {
 	p.needDecap = uint8(wc.Gate)
 	p.precedence = uint32(math.MaxUint32 - wc.Priority)
 
@@ -247,7 +248,7 @@ func UnmarshalPdr(wc *bess_pb.WildcardMatchCommandAddArg) (p FakePdr) {
 	return
 }
 
-func UnmarshalFar(em *bess_pb.ExactMatchCommandAddArg) (f FakeFar) {
+func UnmarshalFar(em *click_pb.ExactMatchCommandAddArg) (f FakeFar) {
 	// Fields.
 	f.FarID = uint32(em.Fields[0].GetValueInt())
 	f.fseID = em.Fields[1].GetValueInt()
@@ -263,7 +264,7 @@ func UnmarshalFar(em *bess_pb.ExactMatchCommandAddArg) (f FakeFar) {
 	return
 }
 
-func UnmarshalSessionQer(qc *bess_pb.QosCommandAddArg) (q FakeQer) {
+func UnmarshalSessionQer(qc *click_pb.QosCommandAddArg) (q FakeQer) {
 	// Fields.
 	// srcIface = uint32(qc.Fields[0].GetValueInt())
 	q.fseID = qc.Fields[1].GetValueInt()
@@ -271,7 +272,7 @@ func UnmarshalSessionQer(qc *bess_pb.QosCommandAddArg) (q FakeQer) {
 	return
 }
 
-func UnmarshalAppQer(qc *bess_pb.QosCommandAddArg) (q FakeQer) {
+func UnmarshalAppQer(qc *click_pb.QosCommandAddArg) (q FakeQer) {
 	// Fields.
 	// srcIface = uint32(qc.Fields[0].GetValueInt())
 	q.QerID = uint32(qc.Fields[1].GetValueInt())
@@ -283,7 +284,7 @@ func UnmarshalAppQer(qc *bess_pb.QosCommandAddArg) (q FakeQer) {
 	return
 }
 
-// Fake BESS module
+// Fake Click module
 type module interface {
 	Name() string
 	HandleRequest(cmd string, arg *anypb.Any) error
@@ -308,7 +309,7 @@ func (b *baseModule) HandleRequest(cmd string, arg *anypb.Any) (err error) {
 
 type wildcardModule struct {
 	baseModule
-	entries []*bess_pb.WildcardMatchCommandAddArg
+	entries []*click_pb.WildcardMatchCommandAddArg
 }
 
 func (w *wildcardModule) GetState() (msgs []proto.Message) {
@@ -326,12 +327,12 @@ func (w *wildcardModule) HandleRequest(cmd string, arg *anypb.Any) (err error) {
 	log := log.WithField("module", w.Name()).WithField("cmd", cmd)
 
 	if cmd == "add" {
-		wc := &bess_pb.WildcardMatchCommandAddArg{}
+		wc := &click_pb.WildcardMatchCommandAddArg{}
 		err = arg.UnmarshalTo(wc)
 		if err != nil {
 			return err
 		}
-		var existing *bess_pb.WildcardMatchCommandAddArg
+		var existing *click_pb.WildcardMatchCommandAddArg
 		for _, e := range w.entries {
 			if fieldsAreEqual(e.GetValues(), wc.GetValues()) &&
 				fieldsAreEqual(e.GetMasks(), wc.GetMasks()) {
@@ -347,7 +348,7 @@ func (w *wildcardModule) HandleRequest(cmd string, arg *anypb.Any) (err error) {
 			w.entries = append(w.entries, wc)
 		}
 	} else if cmd == "delete" {
-		wc := &bess_pb.WildcardMatchCommandDeleteArg{}
+		wc := &click_pb.WildcardMatchCommandDeleteArg{}
 		err = arg.UnmarshalTo(wc)
 		if err != nil {
 			return err
@@ -366,7 +367,7 @@ func (w *wildcardModule) HandleRequest(cmd string, arg *anypb.Any) (err error) {
 			w.entries = append(w.entries[:idx], w.entries[idx+1:]...)
 		}
 	} else if cmd == "clear" {
-		wc := &bess_pb.WildcardMatchCommandClearArg{}
+		wc := &click_pb.WildcardMatchCommandClearArg{}
 		err = arg.UnmarshalTo(wc)
 		if err != nil {
 			return err
@@ -382,7 +383,7 @@ func (w *wildcardModule) HandleRequest(cmd string, arg *anypb.Any) (err error) {
 
 type exactMatchModule struct {
 	baseModule
-	entries []*bess_pb.ExactMatchCommandAddArg
+	entries []*click_pb.ExactMatchCommandAddArg
 }
 
 func (e *exactMatchModule) GetState() (msgs []proto.Message) {
@@ -400,12 +401,12 @@ func (e *exactMatchModule) HandleRequest(cmd string, arg *anypb.Any) (err error)
 	log := log.WithField("module", e.Name()).WithField("cmd", cmd)
 
 	if cmd == "add" {
-		em := &bess_pb.ExactMatchCommandAddArg{}
+		em := &click_pb.ExactMatchCommandAddArg{}
 		err = arg.UnmarshalTo(em)
 		if err != nil {
 			return err
 		}
-		var existing *bess_pb.ExactMatchCommandAddArg
+		var existing *click_pb.ExactMatchCommandAddArg
 		for _, et := range e.entries {
 			if fieldsAreEqual(et.GetFields(), em.GetFields()) {
 				existing = et
@@ -420,7 +421,7 @@ func (e *exactMatchModule) HandleRequest(cmd string, arg *anypb.Any) (err error)
 			e.entries = append(e.entries, em)
 		}
 	} else if cmd == "delete" {
-		em := &bess_pb.ExactMatchCommandDeleteArg{}
+		em := &click_pb.ExactMatchCommandDeleteArg{}
 		err = arg.UnmarshalTo(em)
 		if err != nil {
 			return err
@@ -438,7 +439,7 @@ func (e *exactMatchModule) HandleRequest(cmd string, arg *anypb.Any) (err error)
 			e.entries = append(e.entries[:idx], e.entries[idx+1:]...)
 		}
 	} else if cmd == "clear" {
-		em := &bess_pb.ExactMatchCommandClearArg{}
+		em := &click_pb.ExactMatchCommandClearArg{}
 		err = arg.UnmarshalTo(em)
 		if err != nil {
 			return err
@@ -454,7 +455,7 @@ func (e *exactMatchModule) HandleRequest(cmd string, arg *anypb.Any) (err error)
 
 type qosModule struct {
 	baseModule
-	entries []*bess_pb.QosCommandAddArg
+	entries []*click_pb.QosCommandAddArg
 }
 
 func (q *qosModule) GetState() (msgs []proto.Message) {
@@ -472,12 +473,12 @@ func (q *qosModule) HandleRequest(cmd string, arg *anypb.Any) (err error) {
 	log := log.WithField("module", q.Name()).WithField("cmd", cmd)
 
 	if cmd == "add" {
-		wc := &bess_pb.QosCommandAddArg{}
+		wc := &click_pb.QosCommandAddArg{}
 		err = arg.UnmarshalTo(wc)
 		if err != nil {
 			return err
 		}
-		var existing *bess_pb.QosCommandAddArg
+		var existing *click_pb.QosCommandAddArg
 		for _, e := range q.entries {
 			if fieldsAreEqual(e.GetFields(), wc.GetFields()) {
 				existing = e
@@ -492,7 +493,7 @@ func (q *qosModule) HandleRequest(cmd string, arg *anypb.Any) (err error) {
 			q.entries = append(q.entries, wc)
 		}
 	} else if cmd == "delete" {
-		qc := &bess_pb.QosCommandDeleteArg{}
+		qc := &click_pb.QosCommandDeleteArg{}
 		err = arg.UnmarshalTo(qc)
 		if err != nil {
 			return err
@@ -510,7 +511,7 @@ func (q *qosModule) HandleRequest(cmd string, arg *anypb.Any) (err error) {
 			q.entries = append(q.entries[:idx], q.entries[idx+1:]...)
 		}
 	} else if cmd == "clear" {
-		qc := &bess_pb.QosCommandClearArg{}
+		qc := &click_pb.QosCommandClearArg{}
 		err = arg.UnmarshalTo(qc)
 		if err != nil {
 			return err

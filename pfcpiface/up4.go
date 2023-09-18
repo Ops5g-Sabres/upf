@@ -14,7 +14,7 @@ import (
 
 	"google.golang.org/grpc/connectivity"
 
-	"github.com/omec-project/upf-epc/internal/p4constants"
+	"github.com/omec-project/upf/internal/p4constants"
 	"google.golang.org/grpc/codes"
 
 	p4 "github.com/p4lang/p4runtime/go/p4/v1"

@@ -6,21 +6,22 @@ package integration
 import (
 	"encoding/json"
 	"errors"
-	"github.com/omec-project/pfcpsim/pkg/pfcpsim"
-	"github.com/omec-project/upf-epc/internal/p4constants"
-	"github.com/omec-project/upf-epc/pfcpiface"
-	"github.com/omec-project/upf-epc/pkg/fake_bess"
-	"github.com/omec-project/upf-epc/test/integration/providers"
-	v1 "github.com/p4lang/p4runtime/go/p4/v1"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
-	"github.com/wmnsk/go-pfcp/ie"
 	"io/ioutil"
 	"net"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/omec-project/pfcpsim/pkg/pfcpsim"
+	"github.com/omec-project/upf/internal/p4constants"
+	"github.com/omec-project/upf/pfcpiface"
+	"github.com/omec-project/upf/pkg/fake_bess"
+	"github.com/omec-project/upf/test/integration/providers"
+	v1 "github.com/p4lang/p4runtime/go/p4/v1"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
+	"github.com/wmnsk/go-pfcp/ie"
 )
 
 // this file should contain all the struct defs/constants used among different test cases.
@@ -29,15 +30,16 @@ const (
 	ConfigPath             = "/tmp/upf.json"
 	ContainerNamePFCPAgent = "pfcpiface"
 	ContainerNameMockUP4   = "mock-up4"
-	ImageNamePFCPAgent     = "upf-epc-pfcpiface:integration"
+	ImageNamePFCPAgent     = "upf-pfcpiface:integration"
 	ImageNameMockUP4       = "docker.io/opennetworking/mn-stratum:21.12"
 	DockerTestNetwork      = "testnet"
 
 	EnvMode     = "MODE"
 	EnvDatapath = "DATAPATH"
 
-	DatapathUP4  = "up4"
-	DatapathBESS = "bess"
+	DatapathUP4   = "up4"
+	DatapathBESS  = "bess"
+	DatapathClick = "click"
 
 	ModeDocker = "docker"
 	ModeNative = "native"
@@ -81,7 +83,8 @@ var (
 	// pfcpAgent instance is used only in the native mode
 	pfcpAgent *pfcpiface.PFCPIface
 
-	bessFake *fake_bess.FakeBESS
+	bessFake  *fake_bess.FakeBESS
+	fakeClick *fake_click.FakeClick
 )
 
 type pfcpSessionData struct {
@@ -246,6 +249,10 @@ func waitForBESSFakeToStart() error {
 	return waitForPortOpen("tcp", "127.0.0.1", "10514")
 }
 
+func waitForFakeClickToStart() error {
+	return waitForPortOpen("tcp", "127.0.0.1", "50052")
+}
+
 func isModeNative() bool {
 	return os.Getenv(EnvMode) == ModeNative
 }
@@ -260,6 +267,10 @@ func isDatapathUP4() bool {
 
 func isDatapathBESS() bool {
 	return os.Getenv(EnvDatapath) == DatapathBESS
+}
+
+func isDatapathClick() bool {
+	return os.Getenv(EnvDatapath) == DatapathClick
 }
 
 func initForwardingPipelineConfig() {
@@ -345,6 +356,16 @@ func setup(t *testing.T, configType uint32) {
 		require.NoErrorf(t, err, "failed to start BESS fake: %v", err)
 	case DatapathUP4:
 		MustStartMockUP4()
+	case DatapathClick:
+		fakeClick = fake_click.NewFakeClick()
+		go func() {
+			if err := fakeClick.Run(":50052"); err != nil {
+				panic(err)
+			}
+		}()
+
+		err := waitForFakeClickToStart()
+		require.NoErrorf(t, err, "failed to start Click fake: %v", err)
 	}
 
 	switch os.Getenv(EnvMode) {
@@ -400,6 +421,10 @@ func teardown(t *testing.T) {
 		if bessFake != nil {
 			bessFake.Stop()
 		}
+	case DatapathClick:
+		if fakeClick != nil {
+			fakeClick.Stop()
+		}
 	}
 }
 
@@ -409,6 +434,8 @@ func verifyEntries(t *testing.T, testdata *pfcpSessionData, expectedValues p4RtV
 		verifyP4RuntimeEntries(t, testdata, expectedValues, ueState)
 	case DatapathBESS:
 		verifyBessEntries(t, bessFake, testdata, expectedValues, ueState)
+	case DatapathClick:
+		t.Skip("TODO")
 	}
 }
 
@@ -418,6 +445,8 @@ func verifySliceMeter(t *testing.T, expectedValues p4RtValues) {
 		verifyP4RuntimeSliceMeter(t, expectedValues)
 	case DatapathBESS:
 		t.Skip("Unimplemented")
+	case DatapathClick:
+		t.Skip("TODO")
 	}
 }
 
@@ -427,5 +456,7 @@ func verifyNoEntries(t *testing.T, expectedValues p4RtValues) {
 		verifyNoP4RuntimeEntries(t, expectedValues)
 	case DatapathBESS:
 		verifyNoBessRuntimeEntries(t, bessFake)
+	case DatapathClick:
+		t.Skip("TODO")
 	}
 }

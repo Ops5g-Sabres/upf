@@ -6,7 +6,7 @@ package integration
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/omec-project/upf-epc/pfcpiface"
+	"github.com/omec-project/upf/pfcpiface"
 	"github.com/sirupsen/logrus"
 	"net/http"
 	"os"

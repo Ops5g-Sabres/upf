@@ -4,7 +4,7 @@
 package pfcpiface
 
 import (
-	"github.com/omec-project/upf-epc/internal/p4constants"
+	"github.com/omec-project/upf/internal/p4constants"
 	log "github.com/sirupsen/logrus"
 
 	"net"
@@ -31,11 +31,14 @@ type Conf struct {
 	CPIface           CPIfaceInfo      `json:"cpiface"`
 	P4rtcIface        P4rtcInfo        `json:"p4rtciface"`
 	EnableP4rt        bool             `json:"enable_p4rt"`
+	EnableBess        bool             `json:"enable_bess"`
+	EnableClick       bool             `json:"enable_click"`
 	EnableFlowMeasure bool             `json:"measure_flow"`
 	SimInfo           SimModeInfo      `json:"sim"`
 	ConnTimeout       uint32           `json:"conn_timeout"` // TODO(max): unused, remove
 	ReadTimeout       uint32           `json:"read_timeout"` // TODO(max): convert to duration string
 	EnableNotifyBess  bool             `json:"enable_notify_bess"`
+	EnableNotifyClick bool             `json:"enable_notify_click"`
 	EnableEndMarker   bool             `json:"enable_end_marker"`
 	NotifySockAddr    string           `json:"notify_sockaddr"`
 	EndMarkerSockAddr string           `json:"endmarker_sockaddr"`

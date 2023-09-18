@@ -1,4 +1,4 @@
-module github.com/omec-project/upf-epc
+module github.com/omec-project/upf
 
 go 1.16
 
@@ -36,3 +36,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	gotest.tools/v3 v3.1.0 // indirect
 )
+
+replace github.com/omec-project/upf => github.com/Ops5g-Sabres/upf v0.0.1

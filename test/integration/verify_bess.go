@@ -4,7 +4,7 @@
 package integration
 
 import (
-	"github.com/omec-project/upf-epc/pkg/fake_bess"
+	"github.com/omec-project/upf/pkg/fake_bess"
 	"github.com/stretchr/testify/require"
 	"testing"
 )

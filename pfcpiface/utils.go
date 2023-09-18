@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/omec-project/upf-epc/internal/p4constants"
+	"github.com/omec-project/upf/internal/p4constants"
 
 	log "github.com/sirupsen/logrus"
 )

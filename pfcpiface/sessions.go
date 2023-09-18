@@ -8,7 +8,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/omec-project/upf-epc/pfcpiface/metrics"
+	"github.com/omec-project/upf/pfcpiface/metrics"
 )
 
 type PacketForwardingRules struct {
@@ -50,7 +50,7 @@ func (pConn *PFCPConn) NewPFCPSession(rseid uint64) (PFCPSession, bool) {
 		s.metrics = metrics.NewSession(pConn.nodeID.remote)
 
 		// Metrics update
-		pConn.SaveSessions(s.metrics)
+		pConn.InstrumentPFCP.SaveSessions(s.metrics)
 
 		return s, true
 	}
@@ -62,7 +62,7 @@ func (pConn *PFCPConn) NewPFCPSession(rseid uint64) (PFCPSession, bool) {
 func (pConn *PFCPConn) RemoveSession(session PFCPSession) {
 	// Metrics update
 	session.metrics.Delete()
-	pConn.SaveSessions(session.metrics)
+	pConn.InstrumentPFCP.SaveSessions(session.metrics)
 
 	if err := pConn.store.DeleteSession(session.localSEID); err != nil {
 		log.Errorf("Failed to delete PFCP session from store: %v", err)

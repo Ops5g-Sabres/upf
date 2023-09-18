@@ -28,7 +28,7 @@ func (u upfMsgType) String() string {
 	} else if u == upfMsgTypeClear {
 		return "clear"
 	} else {
-		return "unknown"
+		return unknownString
 	}
 }
 

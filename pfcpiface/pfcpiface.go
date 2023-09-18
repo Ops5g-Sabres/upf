@@ -46,10 +46,13 @@ func NewPFCPIface(conf Conf) *PFCPIface {
 		conf: conf,
 	}
 
+	// check the configuration file to find which datapath to enable
 	if conf.EnableP4rt {
 		pfcpIface.fp = &UP4{}
-	} else {
+	} else if conf.EnableBess {
 		pfcpIface.fp = &bess{}
+	} else if conf.EnableClick {
+		pfcpIface.fp = &click{}
 	}
 
 	httpPort := "8080"

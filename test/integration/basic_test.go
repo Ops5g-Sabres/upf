@@ -4,8 +4,8 @@
 package integration
 
 import (
-	"github.com/omec-project/upf-epc/internal/p4constants"
-	"github.com/omec-project/upf-epc/pfcpiface"
+	"github.com/omec-project/upf/internal/p4constants"
+	"github.com/omec-project/upf/pfcpiface"
 	"github.com/wmnsk/go-pfcp/message"
 	"net"
 	"os"
