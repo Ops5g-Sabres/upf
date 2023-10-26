@@ -1,0 +1,4 @@
+[submodule "pfcpiface/click_pb/moa"]
+	path = pfcpiface/click_pb/moa
+	url = https://pulwar.isi.edu/sabres/moa.git
+	branch = lt-dev

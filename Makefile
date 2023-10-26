@@ -2,6 +2,7 @@
 # Copyright 2020-present Open Networking Foundation
 
 PROJECT_NAME             := upf-epc
+SHELL                    := /bin/bash
 VERSION                  ?= $(shell cat ./VERSION)
 OSTYPE                   := $(shell uname -s)
 ifeq ($(OSTYPE),Linux)
@@ -70,7 +71,7 @@ docker-push:
 
 # Change target to bess-build/pfcpiface to exctract src/obj/bins for performance analysis
 output:
-	DOCKER_BUILDKIT=$(DOCKER_BUILDKIT) docker build $(DOCKER_PULL) $(DOCKER_BUILD_ARGS) \
+	DOCKER_BUILDKIT=$(DOCKER_BUILDKIT) docker build -f bess-builder.dockerfile  $(DOCKER_PULL) $(DOCKER_BUILD_ARGS) \
 		--target artifacts \
 		--output type=tar,dest=output.tar \
 		.;
@@ -83,6 +84,18 @@ test-up4-integration-docker: docker-build
 	docker network prune -f
 	MODE=docker DATAPATH=up4 go test -v -count=1 -failfast -timeout 15m ./test/integration/...
 
+submodules:
+	git submodule update --recursive --init
+
+lincoln-test:
+	#DOCKER_BUILDKIT=1 docker build --load -f click-builder.dockerfile -t docker.io/isilincoln/upf-click:latest .;
+	sudo docker build -f click-builder.dockerfile -t docker.io/isilincoln/upf-click:latest .;
+	sudo docker kill click-builder || true; sudo docker rm click-builder || true;
+	sudo docker run -dt --entrypoint /bin/bash --name click-builder docker.io/isilincoln/upf-click:latest "export PATH=$$PATH:/bin; export PATH=$$PATH:/usr/bin; sleep 60";
+	sudo docker cp click-builder:/sabres/ ${BESS_PB_DIR}/click_pb
+	sudo docker cp click-builder:/mgmt/ ${BESS_PB_DIR}/click_pb
+	sudo docker cp click-builder:/sdcore/ ${BESS_PB_DIR}/click_pb
+
 test-bess-integration-native:
 	MODE=native DATAPATH=bess go test \
        -v \
@@ -91,6 +104,7 @@ test-bess-integration-native:
        -failfast \
        ./test/integration/...
 
+#test-click-integration-native: | lincoln-test
 test-click-integration-native:
 	MODE=native DATAPATH=click go test \
        -v \
@@ -100,7 +114,7 @@ test-click-integration-native:
        ./test/integration/...
 
 pb:
-	DOCKER_BUILDKIT=$(DOCKER_BUILDKIT) docker build $(DOCKER_PULL) $(DOCKER_BUILD_ARGS) \
+	DOCKER_BUILDKIT=$(DOCKER_BUILDKIT) docker build -f bess-builder.dockerfile $(DOCKER_PULL) $(DOCKER_BUILD_ARGS) \
 		--target pb \
 		--output output \
 		.;
@@ -108,7 +122,7 @@ pb:
 
 # Python grpc/protobuf generation
 py-pb:
-	DOCKER_BUILDKIT=$(DOCKER_BUILDKIT) docker build $(DOCKER_PULL) $(DOCKER_BUILD_ARGS) \
+	DOCKER_BUILDKIT=$(DOCKER_BUILDKIT) docker build docker build -f bess-builder.dockerfile $(DOCKER_PULL) $(DOCKER_BUILD_ARGS) \
 		--target ptf-pb \
 		--output output \
 		.;

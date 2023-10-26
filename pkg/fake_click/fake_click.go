@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/omec-project/upf/pfcpiface/click_pb"
+	//mgmt "github.com/omec-project/upf/pfcpiface/click_pb/mgmt"
+	//sabres "github.com/omec-project/upf/pfcpiface/click_pb/sabres"
+	click_pb "github.com/omec-project/upf/pfcpiface/click_pb/sd-core"
 	"google.golang.org/grpc"
 )
 
@@ -49,55 +51,18 @@ func (b *FakeClick) Stop() {
 }
 
 func (b *FakeClick) GetPdrTableEntries() (entries map[uint32][]FakePdr) {
-	entries = make(map[uint32][]FakePdr)
-	msgs := b.service.GetOrAddModule(pdrLookupModuleName).GetState()
-	for _, m := range msgs {
-		e, ok := m.(*click_pb.WildcardMatchCommandAddArg)
-		if !ok {
-			panic("unexpected message type")
-		}
-		pdr := UnmarshalPdr(e)
-		entries[pdr.PdrID] = append(entries[pdr.PdrID], pdr)
-	}
-
-	return
+	return nil
 }
 
 func (b *FakeClick) GetFarTableEntries() (entries map[uint32]FakeFar) {
-	entries = make(map[uint32]FakeFar)
-	msgs := b.service.GetOrAddModule(farLookupModuleName).GetState()
-	for _, m := range msgs {
-		e, ok := m.(*click_pb.ExactMatchCommandAddArg)
-		if !ok {
-			panic("unexpected message type")
-		}
-		far := UnmarshalFar(e)
-		entries[far.FarID] = far
-	}
-	return
+	return nil
 }
 
 // Session QERs are missing a QerID and are therefore returned as a slice, not map.
 func (b *FakeClick) GetSessionQerTableEntries() (entries []FakeQer) {
-	msgs := b.service.GetOrAddModule(sessionQerModuleName).GetState()
-	for _, m := range msgs {
-		e, ok := m.(*click_pb.QosCommandAddArg)
-		if !ok {
-			panic("unexpected message type")
-		}
-		entries = append(entries, UnmarshalSessionQer(e))
-	}
-	return
+	return nil
 }
 
 func (b *FakeClick) GetAppQerTableEntries() (entries []FakeQer) {
-	msgs := b.service.GetOrAddModule(appQerModuleName).GetState()
-	for _, m := range msgs {
-		e, ok := m.(*click_pb.QosCommandAddArg)
-		if !ok {
-			panic("unexpected message type")
-		}
-		entries = append(entries, UnmarshalAppQer(e))
-	}
-	return
+	return nil
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/omec-project/upf/internal/p4constants"
 	"github.com/omec-project/upf/pfcpiface"
 	"github.com/omec-project/upf/pkg/fake_bess"
+	"github.com/omec-project/upf/pkg/fake_click"
 	"github.com/omec-project/upf/test/integration/providers"
 	v1 "github.com/p4lang/p4runtime/go/p4/v1"
 	"github.com/prometheus/client_golang/prometheus"
