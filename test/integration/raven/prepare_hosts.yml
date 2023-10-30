@@ -1,0 +1,41 @@
+- hosts: [upf]
+  tasks:
+    - name: update cache
+      apt:
+        update_cache: yes
+        pkg:
+          - golang
+          - build-essential
+          - make
+          - cmake
+          - protobuf-compiler
+      become: yes
+
+    - name: disable apparmor
+      command: systemctl disable apparmor
+      become: yes
+
+    - name: stop apparmor
+      command: systemctl stop apparmor
+      become: yes
+
+    - name: disable swap
+      command: swapoff -a
+      become: yes
+
+    - name: remove swap from fstab
+      command: sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+      become: yes
+
+    - name: remove docker images
+      shell: yes | docker image prune
+      ignore_errors: yes
+      become: yes
+
+    - name: get docker install script
+      shell: wget -O docker.sh https://get.docker.com/
+    - name: chmod docker install script
+      shell: chmod +x docker.sh
+
+    - name: install docker
+      shell: ./docker.sh

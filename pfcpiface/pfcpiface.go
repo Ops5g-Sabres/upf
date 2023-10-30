@@ -46,6 +46,8 @@ func NewPFCPIface(conf Conf) *PFCPIface {
 		conf: conf,
 	}
 
+	log.Infof("conf settings: %+v", conf)
+
 	// check the configuration file to find which datapath to enable
 	if conf.EnableP4rt {
 		pfcpIface.fp = &UP4{}

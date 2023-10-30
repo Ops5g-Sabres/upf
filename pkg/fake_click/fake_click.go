@@ -6,12 +6,19 @@ package fake_click
 import (
 	"fmt"
 	"net"
+	"sync"
 
 	//mgmt "github.com/omec-project/upf/pfcpiface/click_pb/mgmt"
 	//sabres "github.com/omec-project/upf/pfcpiface/click_pb/sabres"
-	click_pb "github.com/omec-project/upf/pfcpiface/click_pb/sd-core"
+	click_pb "github.com/omec-project/upf/pfcpiface/click_pb/sdcore"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
+
+type fakeClickService struct {
+	click_pb.UnimplementedSDCoreControlServer
+	mtx sync.Mutex
+}
 
 type FakeClick struct {
 	grpcServer *grpc.Server
@@ -28,13 +35,16 @@ func NewFakeClick() *FakeClick {
 
 // Run starts and runs the Click gRPC server on the given address. Blocking until Stop is called.
 func (b *FakeClick) Run(address string) error {
+
+	log.Infof("Fake click run called on: %s", address)
+
 	listener, err := net.Listen("tcp", fmt.Sprintf(address))
 	if err != nil {
 		return err
 	}
 
 	b.grpcServer = grpc.NewServer()
-	click_pb.RegisterClickControlServer(b.grpcServer, b.service)
+	click_pb.RegisterSDCoreControlServer(b.grpcServer, b.service)
 
 	// Blocking
 	err = b.grpcServer.Serve(listener)
@@ -50,19 +60,19 @@ func (b *FakeClick) Stop() {
 	b.grpcServer.Stop()
 }
 
-func (b *FakeClick) GetPdrTableEntries() (entries map[uint32][]FakePdr) {
-	return nil
+func (b *FakeClick) GetPdrTableEntries() {
+	return
 }
 
-func (b *FakeClick) GetFarTableEntries() (entries map[uint32]FakeFar) {
-	return nil
+func (b *FakeClick) GetFarTableEntries() {
+	return
 }
 
 // Session QERs are missing a QerID and are therefore returned as a slice, not map.
-func (b *FakeClick) GetSessionQerTableEntries() (entries []FakeQer) {
-	return nil
+func (b *FakeClick) GetSessionQerTableEntries() {
+	return
 }
 
-func (b *FakeClick) GetAppQerTableEntries() (entries []FakeQer) {
-	return nil
+func (b *FakeClick) GetAppQerTableEntries() {
+	return
 }

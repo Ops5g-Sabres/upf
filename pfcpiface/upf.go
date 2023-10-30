@@ -173,6 +173,9 @@ func NewUPF(conf *Conf, fp datapath) *upf {
 		}
 	}
 
+	log.Infof("object: %v", u)
+	log.Infof("object datapath: %v", u.datapath)
+	log.Infof("info sent: %v | %v", u, conf)
 	u.datapath.SetUpfInfo(u, conf)
 
 	return u

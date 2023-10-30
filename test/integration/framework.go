@@ -251,7 +251,7 @@ func waitForBESSFakeToStart() error {
 }
 
 func waitForFakeClickToStart() error {
-	return waitForPortOpen("tcp", "127.0.0.1", "50052")
+	return waitForPortOpen("tcp", "127.0.0.1", "10515")
 }
 
 func isModeNative() bool {
@@ -344,7 +344,20 @@ func setup(t *testing.T, configType uint32) {
 	// 		 the registry in a bad state. Use custom registries to avoid global state.
 	prometheus.DefaultRegisterer = prometheus.NewRegistry()
 
-	switch os.Getenv(EnvDatapath) {
+	dpath := os.Getenv(EnvDatapath)
+	t.Logf("test datapath set: %s", dpath)
+
+	switch dpath {
+	case DatapathClick:
+		fakeClick = fake_click.NewFakeClick()
+		go func() {
+			// TODO: all these ports need to be passed in
+			if err := fakeClick.Run(":10515"); err != nil {
+				panic(err)
+			}
+		}()
+		err := waitForFakeClickToStart()
+		require.NoErrorf(t, err, "failed to start fake click: %v", err)
 	case DatapathBESS:
 		bessFake = fake_bess.NewFakeBESS()
 		go func() {
@@ -357,16 +370,6 @@ func setup(t *testing.T, configType uint32) {
 		require.NoErrorf(t, err, "failed to start BESS fake: %v", err)
 	case DatapathUP4:
 		MustStartMockUP4()
-	case DatapathClick:
-		fakeClick = fake_click.NewFakeClick()
-		go func() {
-			if err := fakeClick.Run(":50052"); err != nil {
-				panic(err)
-			}
-		}()
-
-		err := waitForFakeClickToStart()
-		require.NoErrorf(t, err, "failed to start Click fake: %v", err)
 	}
 
 	switch os.Getenv(EnvMode) {

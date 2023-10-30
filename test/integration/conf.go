@@ -6,11 +6,12 @@ package integration
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/omec-project/upf/pfcpiface"
-	"github.com/sirupsen/logrus"
 	"net/http"
 	"os"
 	"runtime"
+
+	"github.com/omec-project/upf/pfcpiface"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -28,6 +29,9 @@ var baseConfig = pfcpiface.Conf{
 	ReadTimeout: 15,
 	RespTimeout: "2s",
 	LogLevel:    logrus.TraceLevel,
+	EnableP4rt:  false,
+	EnableBess:  false,
+	EnableClick: false,
 }
 
 func BESSConfigDefault() pfcpiface.Conf {
@@ -47,11 +51,45 @@ func BESSConfigDefault() pfcpiface.Conf {
 	config.CoreIface = pfcpiface.IfaceType{
 		IfName: intf,
 	}
+	config.EnableBess = true
+
 	return config
 }
 
 func BESSConfigUPFBasedIPAllocation() pfcpiface.Conf {
 	config := BESSConfigDefault()
+	config.CPIface = pfcpiface.CPIfaceInfo{
+		EnableUeIPAlloc: true,
+		UEIPPool:        UEPoolUPF,
+	}
+
+	return config
+}
+
+func ClickConfigDefault() pfcpiface.Conf {
+	var intf string
+
+	switch runtime.GOOS {
+	case "darwin":
+		intf = "lo0"
+	case "linux":
+		intf = "lo"
+	}
+
+	config := baseConfig
+	config.AccessIface = pfcpiface.IfaceType{
+		IfName: intf,
+	}
+	config.CoreIface = pfcpiface.IfaceType{
+		IfName: intf,
+	}
+
+	config.EnableClick = true
+	return config
+}
+
+func ClickConfigUPFBasedIPAllocation() pfcpiface.Conf {
+	config := ClickConfigDefault()
 	config.CPIface = pfcpiface.CPIfaceInfo{
 		EnableUeIPAlloc: true,
 		UEIPPool:        UEPoolUPF,
@@ -116,6 +154,13 @@ func GetConfig(datapath string, configType uint32) pfcpiface.Conf {
 			return UP4ConfigUPFBasedIPAllocation()
 		case ConfigWipeOutOnUP4Restart:
 			return UP4ConfigWipeOutOnUP4Restart()
+		}
+	case DatapathClick:
+		switch configType {
+		case ConfigDefault:
+			return ClickConfigDefault()
+		case ConfigUPFBasedIPAllocation:
+			return ClickConfigUPFBasedIPAllocation()
 		}
 	case DatapathBESS:
 		switch configType {

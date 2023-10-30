@@ -20,7 +20,7 @@ import (
 
 const (
 	PFCPPort = "8805"
-	MaxItems = 10
+	MaxItems = 5
 )
 
 // Timeout : connection timeout.

@@ -113,6 +113,14 @@ test-click-integration-native:
        -failfast \
        ./test/integration/...
 
+test-click-integration-docker:
+	MODE=docker DATAPATH=click go test \
+       -v \
+       -race \
+       -count=1 \
+       -failfast \
+       ./test/integration/...
+
 pb:
 	DOCKER_BUILDKIT=$(DOCKER_BUILDKIT) docker build -f bess-builder.dockerfile $(DOCKER_PULL) $(DOCKER_BUILD_ARGS) \
 		--target pb \
